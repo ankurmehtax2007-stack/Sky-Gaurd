@@ -1,97 +1,67 @@
 import React from "react";
 
 function About() {
-
   return (
-    <div className="page about-page">
-
-      <p className="eyebrow">
-        ABOUT SKyGUARD
-      </p>
-
-      <h1>
-        SkyGuard <span>AI</span>
-      </h1>
-
-      <p className="about-intro">
-        Intelligent anomaly detection and monitoring
-        for Automatic Weather Stations.
-      </p>
-
-
-      <div className="about-grid">
-
-        <div className="about-box">
-
-          <div className="about-icon">
-            ◉
-          </div>
-
-          <h2>Real-Time Monitoring</h2>
-
-          <p>
-            SkyGuard continuously monitors sensor
-            readings from Automatic Weather Stations
-            including temperature, humidity and
-            atmospheric pressure.
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">ABOUT SKYGUARD</p>
+          <h1>
+            Intelligent <span>Weather Monitoring</span>
+          </h1>
+          <p className="subtitle">
+            Understanding the system behind SkyGuard AI.
           </p>
-
         </div>
-
-
-        <div className="about-box">
-
-          <div className="about-icon">
-            ✦
-          </div>
-
-          <h2>AI Anomaly Detection</h2>
-
-          <p>
-            Machine learning models identify unusual
-            sensor behaviour and calculate anomaly
-            scores and confidence.
-          </p>
-
-        </div>
-
-
-        <div className="about-box">
-
-          <div className="about-icon">
-            🚨
-          </div>
-
-          <h2>Intelligent Alerts</h2>
-
-          <p>
-            Detected anomalies are transformed into
-            actionable alerts with severity,
-            diagnosis and recommended actions.
-          </p>
-
-        </div>
-
-
-        <div className="about-box">
-
-          <div className="about-icon">
-            ◎
-          </div>
-
-          <h2>Explainable AI</h2>
-
-          <p>
-            SHAP evidence helps explain which sensor
-            features contributed to the detected
-            anomaly.
-          </p>
-
-        </div>
-
       </div>
 
-    </div>
+      <div className="about-grid">
+        <div className="about-card about-main">
+          <div className="about-logo">☁</div>
+
+          <h2>SkyGuard AI</h2>
+
+          <p>
+            SkyGuard is an intelligent monitoring platform designed to
+            observe Automatic Weather Stations and identify unusual sensor
+            behaviour.
+          </p>
+
+          <p>
+            The platform brings together real-time weather readings,
+            anomaly detection, station monitoring and AI-assisted diagnosis
+            in a single dashboard.
+          </p>
+        </div>
+
+        <div className="about-card">
+          <span className="about-number">01</span>
+          <h3>Real-Time Monitoring</h3>
+          <p>
+            Monitor temperature, pressure, humidity and other station
+            readings.
+          </p>
+        </div>
+
+        <div className="about-card">
+          <span className="about-number">02</span>
+          <h3>Anomaly Detection</h3>
+          <p>
+            Detect unusual sensor behaviour and highlight potentially
+            critical events.
+          </p>
+        </div>
+
+        <div className="about-card">
+          <span className="about-number">03</span>
+          <h3>AI Diagnosis</h3>
+          <p>
+            Provide model-based diagnosis, evidence and recommended actions
+            for detected anomalies.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
 

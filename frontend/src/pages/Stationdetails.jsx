@@ -1,104 +1,75 @@
 import React from "react";
+import TemperatureChart from "../components/TemperatureChart";
 
 function StationDetails({ station, setActivePage }) {
-
   if (!station) {
-    return <p>No station selected.</p>;
+    return (
+      <div className="empty-state">
+        <h2>No station selected</h2>
+        <button onClick={() => setActivePage("stations")}>Go to Stations</button>
+      </div>
+    );
   }
 
-  return (
-    <div className="page">
+  const isOffline = station.status === "OFFLINE";
 
-      <button
-        className="back-button"
-        onClick={() => setActivePage("stations")}
-      >
+  return (
+    <>
+      <button className="back-button" onClick={() => setActivePage("stations")}>
         ← Back to Stations
       </button>
 
-
       <div className="station-detail-header">
-
         <div>
-
-          <p className="eyebrow">
-            {station.station_id}
+          <p className="eyebrow">STATION DETAILS</p>
+          <h1>{station.station_name}</h1>
+          <p>
+            {station.location} · {station.station_id}
           </p>
-
-          <h1>
-            {station.station_name}
-          </h1>
-
-          <p>{station.location}</p>
-
         </div>
 
-        <span
-          className={`station-badge ${station.status.toLowerCase()}`}
-        >
+        <span className={`station-status ${station.status.toLowerCase()}`}>
           ● {station.status}
         </span>
-
       </div>
 
-
-      {station.status === "OFFLINE" ? (
-
-        <div className="offline-box">
-          ⚠ This station is currently offline.
-        </div>
-
+      {isOffline ? (
+        <div className="offline-box">⚠ This station is currently offline.</div>
       ) : (
-
         <>
-          <div className="condition-grid">
-
-            <div className="condition-card temperature">
+          <div className="detail-grid">
+            <div className="detail-card">
               <span>🌡</span>
-              <small>Temperature</small>
+              <p>Temperature</p>
               <strong>{station.temperature}°C</strong>
-              <p>Current reading</p>
             </div>
 
-            <div className="condition-card humidity">
-              <span>💧</span>
-              <small>Humidity</small>
-              <strong>{station.humidity}%</strong>
-              <p>Current reading</p>
-            </div>
-
-            <div className="condition-card pressure">
+            <div className="detail-card">
               <span>◉</span>
-              <small>Pressure</small>
+              <p>Pressure</p>
               <strong>{station.pressure} hPa</strong>
-              <p>Current reading</p>
             </div>
 
+            <div className="detail-card">
+              <span>💧</span>
+              <p>Humidity</p>
+              <strong>{station.humidity}%</strong>
+            </div>
           </div>
 
-
-          <div className="chart-placeholder">
-
-            <h2>Sensor Trends</h2>
-
-            <p>
-              Temperature / Humidity / Pressure historical
-              data will appear here.
-            </p>
-
-            <div className="graph-placeholder">
-              Temperature Trend
-              <br />
-              ╱╲___╱╲____╱╲
+          <div className="detail-chart-card">
+            <div className="section-title">
+              <div>
+                <h2>Station Temperature</h2>
+                <p>Temperature variation over the last 24 hours</p>
+              </div>
             </div>
 
+            <TemperatureChart size="large" />
           </div>
-
         </>
-
       )}
-
-    </div>
+    </>
   );
 }
 

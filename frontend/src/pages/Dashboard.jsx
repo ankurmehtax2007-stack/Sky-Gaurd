@@ -1,196 +1,129 @@
 import React from "react";
 import { stations, alerts } from "../data/mockData";
+import SensorCard from "../components/SensorCard";
+import AlertCard from "../components/AlertCard";
+import TemperatureChart from "../components/TemperatureChart";
 
 function Dashboard({ setActivePage, setSelectedAlert }) {
+  const onlineStations = stations.filter((s) => s.status !== "OFFLINE").length;
 
-  const onlineStations = stations.filter(
-    (station) => station.status === "ONLINE"
-  ).length;
-
-  const activeAlerts = alerts.length;
-
-  const averageTemperature =
-    stations
-      .filter((station) => station.status !== "OFFLINE")
-      .reduce((sum, station) => sum + station.temperature, 0) /
-    stations.filter((station) => station.status !== "OFFLINE").length;
+  const activeStations = stations.filter((s) => s.status !== "OFFLINE");
+  const avgTemperature =
+    activeStations.reduce((sum, s) => sum + s.temperature, 0) /
+    activeStations.length;
 
   return (
-    <div className="page">
-
+    <>
       <div className="page-heading">
         <div>
           <p className="eyebrow">REAL-TIME MONITORING</p>
-
           <h1>
             Weather <span>Overview</span>
           </h1>
-
-          <p>
+          <p className="subtitle">
             Monitor your Automatic Weather Station network.
           </p>
         </div>
+
+        <div className="date-box">
+          <span>Today</span>
+          <strong>26 Aug 2026</strong>
+        </div>
       </div>
 
-
-      {/* MAIN STATS */}
-
-      <div className="stats-grid">
-
-        <div className="stat-card">
-          <div className="stat-icon purple">◉</div>
-
+      {/* SUMMARY CARDS */}
+      <div className="summary-grid">
+        <div className="summary-card blue">
+          <div className="summary-icon">◉</div>
           <div>
-            <small>Total Stations</small>
+            <p>Total Stations</p>
             <h2>{stations.length}</h2>
           </div>
         </div>
 
-
-        <div className="stat-card">
-          <div className="stat-icon green">●</div>
-
+        <div className="summary-card green">
+          <div className="summary-icon">●</div>
           <div>
-            <small>Online Stations</small>
+            <p>Online Stations</p>
             <h2>{onlineStations}</h2>
           </div>
         </div>
 
-
-        <div className="stat-card">
-          <div className="stat-icon red">🚨</div>
-
+        <div className="summary-card red">
+          <div className="summary-icon">🚨</div>
           <div>
-            <small>Active Alerts</small>
-            <h2>{activeAlerts}</h2>
+            <p>Active Alerts</p>
+            <h2>{alerts.length}</h2>
           </div>
         </div>
 
-
-        <div className="stat-card">
-          <div className="stat-icon orange">°</div>
-
+        <div className="summary-card orange">
+          <div className="summary-icon">°</div>
           <div>
-            <small>Avg Temperature</small>
-            <h2>{averageTemperature.toFixed(1)}°C</h2>
+            <p>Avg Temperature</p>
+            <h2>{avgTemperature.toFixed(1)}°C</h2>
           </div>
         </div>
-
       </div>
-
 
       {/* CURRENT CONDITIONS */}
-
-      <div className="section-title">
-        <h2>Current Conditions</h2>
-
-        <button
-          onClick={() => setActivePage("stations")}
-        >
-          View Stations →
-        </button>
-      </div>
-
-
-      <div className="condition-grid">
-
-        <div className="condition-card temperature">
-          <span>🌡</span>
-          <small>Temperature</small>
-          <strong>28.6°C</strong>
-          <p>Normal</p>
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <h2>Current Conditions</h2>
+            <p>Latest readings across the network</p>
+          </div>
         </div>
 
+        <div className="sensor-grid">
+          <SensorCard type="temperature" icon="🌡" label="Temperature" value="28.6°C" />
+          <SensorCard type="pressure" icon="◉" label="Pressure" value="1012 hPa" />
+          <SensorCard type="humidity" icon="💧" label="Humidity" value="67%" />
+          <SensorCard type="wind" icon="〰" label="Wind Speed" value="12 km/h" status="Light Breeze" />
+        </div>
+      </section>
 
-        <div className="condition-card pressure">
-          <span>◉</span>
-          <small>Pressure</small>
-          <strong>1012 hPa</strong>
-          <p>Normal</p>
+      {/* GRAPH */}
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <h2>Temperature Trend</h2>
+            <p>Last 24 hours</p>
+          </div>
+
+          <button className="small-button">24 Hours ▾</button>
         </div>
 
-
-        <div className="condition-card humidity">
-          <span>💧</span>
-          <small>Humidity</small>
-          <strong>67%</strong>
-          <p>Normal</p>
-        </div>
-
-
-        <div className="condition-card wind">
-          <span>〰</span>
-          <small>Wind Speed</small>
-          <strong>12 km/h</strong>
-          <p>Light breeze</p>
-        </div>
-
-      </div>
-
+        <TemperatureChart size="small" />
+      </section>
 
       {/* ALERTS */}
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <h2>Critical Alerts</h2>
+            <p>Recent anomalies detected by SkyGuard</p>
+          </div>
 
-      <div className="section-title">
-        <h2>Critical Alerts</h2>
+          <button className="view-all" onClick={() => setActivePage("alerts")}>
+            View All →
+          </button>
+        </div>
 
-        <button
-          onClick={() => setActivePage("alerts")}
-        >
-          View All →
-        </button>
-      </div>
-
-
-      <div className="dashboard-alerts">
-
-        {alerts.map((alert) => (
-
-          <div
-            className={`dashboard-alert ${alert.severity.toLowerCase()}`}
-            key={alert.anomaly_id}
-          >
-
-            <div className="alert-icon">
-              🚨
-            </div>
-
-            <div className="alert-information">
-
-              <strong>{alert.title}</strong>
-
-              <p>
-                {alert.station_name} ·{" "}
-                {alert.readings.temperature}°C
-              </p>
-
-            </div>
-
-            <div className="alert-confidence">
-
-              <span>{alert.severity}</span>
-
-              <small>
-                {Math.round(alert.confidence * 100)}% confidence
-              </small>
-
-            </div>
-
-            <button
-              onClick={() => {
+        <div className="alerts-list">
+          {alerts.map((alert) => (
+            <AlertCard
+              key={alert.anomaly_id}
+              alert={alert}
+              onView={() => {
                 setSelectedAlert(alert);
                 setActivePage("alertDetails");
               }}
-            >
-              View →
-            </button>
-
-          </div>
-
-        ))}
-
-      </div>
-
-    </div>
+            />
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 

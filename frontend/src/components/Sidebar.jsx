@@ -1,63 +1,33 @@
 import React from "react";
+import { alerts } from "../data/mockData";
 
 function Sidebar({ activePage, setActivePage }) {
-
   return (
-
     <aside className="sidebar">
-
-      {/* LOGO */}
-
-      <div
-        className="sidebar-logo"
-        onClick={() => setActivePage("dashboard")}
-      >
-
-        <img
-          src="https://plus.unsplash.com/premium_photo-1677744408402-6c198d22d528?q=80&w=735&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-          alt="SkyGuard"
-          className="skyguard-logo"
-        />
-
+      <div className="brand" onClick={() => setActivePage("dashboard")}>
+        <div className="brand-icon">☁</div>
         <div>
-
-          <h2>SkyGuard</h2>
-
-          <span>AI WEATHER</span>
-
+          <strong>SkyGuard</strong>
+          <span>AI MONITORING</span>
         </div>
-
       </div>
 
-
-      {/* MENU */}
-
-      <div className="sidebar-menu">
-
-        <p className="menu-title">
-          MONITORING
-        </p>
-
+      <div className="nav-section">
+        <p>MAIN MENU</p>
 
         <button
-          className={
-            activePage === "dashboard"
-              ? "menu-item active"
-              : "menu-item"
-          }
+          className={activePage === "dashboard" ? "nav-item active" : "nav-item"}
           onClick={() => setActivePage("dashboard")}
         >
           <span>⌂</span>
           Dashboard
         </button>
 
-
         <button
           className={
-            activePage === "stations" ||
-            activePage === "stationDetails"
-              ? "menu-item active"
-              : "menu-item"
+            activePage === "stations" || activePage === "stationDetails"
+              ? "nav-item active"
+              : "nav-item"
           }
           onClick={() => setActivePage("stations")}
         >
@@ -65,69 +35,47 @@ function Sidebar({ activePage, setActivePage }) {
           Stations
         </button>
 
-
         <button
           className={
-            activePage === "alerts" ||
-            activePage === "alertDetails"
-              ? "menu-item active"
-              : "menu-item"
+            activePage === "alerts" || activePage === "alertDetails"
+              ? "nav-item active"
+              : "nav-item"
           }
           onClick={() => setActivePage("alerts")}
         >
           <span>🚨</span>
-
           Alerts
-
-          <b className="alert-number">
-            4
-          </b>
-
+          <b>{alerts.length}</b>
         </button>
+      </div>
 
-
-        <p className="menu-title second-title">
-          INFORMATION
-        </p>
-
+      <div className="nav-section">
+        <p>INFORMATION</p>
 
         <button
-          className={
-            activePage === "about"
-              ? "menu-item active"
-              : "menu-item"
-          }
+          className={activePage === "about" ? "nav-item active" : "nav-item"}
           onClick={() => setActivePage("about")}
         >
           <span>ⓘ</span>
           About
         </button>
-
       </div>
 
-
-      {/* USER */}
-
-      <div className="sidebar-user">
-
-        <div className="user-avatar">
-          A
+      <div className="sidebar-bottom">
+        <div className="profile">
+          <div className="avatar">A</div>
+          <div>
+            <strong>Ankita</strong>
+            <span>Administrator</span>
+          </div>
         </div>
 
-        <div>
-
-          <strong>Ankita</strong>
-
-          <small>
-            Administrator
-          </small>
-
+        <div className="system-status">
+          <span></span>
+          System monitoring active
         </div>
-
       </div>
-
     </aside>
-
   );
 }
 
