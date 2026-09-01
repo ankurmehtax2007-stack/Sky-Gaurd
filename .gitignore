@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Build/output
+dist/
+build/
+
+# ML/data files
+*.pkl
+*.joblib
+*.model
+*.onnx
+
+# Generated datasets
+data/generated/
+datasets/generated/
+
+# Temporary files
+tmp/
+temp/

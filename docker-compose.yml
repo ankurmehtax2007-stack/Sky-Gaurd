@@ -1,0 +1,58 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports: ["27017:27017"]
+    volumes: ["mongo_data:/data/db"]
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports: ["1883:1883"]
+    volumes:
+      - ./scripts/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  ml-service:
+    build: ./ml-service
+    environment:
+      MODEL_DIR: /app/models
+      METADATA_PATH: /app/metadata/pipeline_metadata.json
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
+      MISTRAL_BASE_URL: ${MISTRAL_BASE_URL:-https://api.mistral.ai/v1}
+    volumes:
+      - ./models:/app/models:ro
+      - ./metadata:/app/metadata:ro
+    ports: ["8000:8000"]
+
+  backend:
+    build: ./backend_node-server
+    environment:
+      MONGO_URI: mongodb://mongo:27017/skyguard
+      MONGO_DB: skyguard
+      ML_SERVICE_URL: http://ml-service:8000
+      MQTT_URL: mqtt://mosquitto:1883
+      MQTT_TOPIC: skyguard/telemetry
+      NODE_PORT: 3000
+      WS_PATH: /ws
+    depends_on: [mongo, ml-service, mosquitto]
+    ports: ["3000:3000"]
+
+  simulator:
+    build: ./simulator
+    environment:
+      MQTT_BROKER: mosquitto
+      MQTT_PORT: 1883
+    depends_on: [mosquitto]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
+        VITE_WS_URL: ws://localhost:3000/ws
+    depends_on: [backend]
+    ports: ["5173:80"]
+
+volumes:
+  mongo_data:
