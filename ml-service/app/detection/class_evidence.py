@@ -80,12 +80,18 @@ def evaluate_class_evidence(
     h_z24 = abs(float(feat_dict.get('humidity_pct_roll24_zscore', 0.0)))
     p_z24 = abs(float(feat_dict.get('pressure_hpa_roll24_zscore', 0.0)))
 
+    t_diff24 = abs(float(feat_dict.get('temperature_c_roll24_diff', 0.0)))
+    h_diff24 = abs(float(feat_dict.get('humidity_pct_roll24_diff', 0.0)))
+    p_diff24 = abs(float(feat_dict.get('pressure_hpa_roll24_diff', 0.0)))
+
     t_fcount = int(feat_dict.get('temperature_c_frozen_count', 1))
     h_fcount = int(feat_dict.get('humidity_pct_frozen_count', 1))
     p_fcount = int(feat_dict.get('pressure_hpa_frozen_count', 1))
     max_frozen = max(t_fcount, h_fcount, p_fcount)
 
     t_var6 = float(feat_dict.get('temperature_c_roll6_var', 1.0))
+    h_var6 = float(feat_dict.get('humidity_pct_roll6_var', 1.0))
+    p_var6 = float(feat_dict.get('pressure_hpa_roll6_var', 1.0))
     dew_dep = float(feat_dict.get('dewpoint_depression_c', 10.0))
 
     # Spatial statistics EXCLUDING the current station
@@ -126,31 +132,35 @@ def evaluate_class_evidence(
     # Recent temperature history for drift / offset linear regression
     recent_temps = [r.temp for r in history_records[-12:]] if len(history_records) >= 3 else [t_val]
     t_slope = compute_linear_trend_slope(recent_temps)
-    t_diff24 = abs(float(feat_dict.get('temperature_c_roll24_diff', 0.0)))
 
     class_evidence: Dict[str, Dict[str, float]] = {}
     class_fused_scores: Dict[str, float] = {}
     why_statements: List[str] = []
 
     # 1. TEMPERATURE SPIKE
+    # Sudden large ΔT jump or extreme thermal reading
+    t_diff_mag = abs(t_diff1)
+    is_raw_temp_spike = (t_diff_mag >= 6.0) or (t_rate >= 6.0) or (t_val >= 46.0) or (t_val <= -5.0)
+    is_sustained_spike = (t_val >= 44.5) or (t_val <= -4.0) or (t_diff24 >= 8.0 and spat_t_dev >= 2.5 and t_val >= 38.0)
+
     temp_spike_temp = float(np.clip(
-        0.55 * min(1.0, max(0.0, (t_diff1 - 2.0) / 7.0)) +
+        0.50 * min(1.0, max(0.0, (t_diff_mag - 2.0) / 7.0)) +
         0.30 * min(1.0, max(0.0, t_rate / 6.0)) +
-        0.15 * min(1.0, max(0.0, t_z24 / 3.0)),
+        0.20 * min(1.0, max(0.0, t_z24 / 3.0)),
         0.0, 1.0
     ))
-    if t_diff1 >= 8.0 or t_rate >= 8.0:
-        temp_spike_temp = max(temp_spike_temp, 0.92)
+    if is_raw_temp_spike or is_sustained_spike:
+        temp_spike_temp = max(temp_spike_temp, 0.94)
 
     temp_spike_phys = float(np.clip(
-        0.60 * min(1.0, max(0.0, (t_val - 45.0) / 5.0)) +
-        0.40 * min(1.0, max(0.0, t_rate / 7.0)),
+        0.60 * min(1.0, max(0.0, (t_val - 44.0) / 6.0)) +
+        0.40 * min(1.0, max(0.0, t_rate / 6.0)),
         0.0, 1.0
     ))
-    if t_val >= 50.0:
+    if t_val >= 46.0 or t_val <= -5.0 or t_rate >= 8.0:
         temp_spike_phys = max(temp_spike_phys, 0.95)
 
-    temp_spike_spat = float(np.clip(min(1.0, spat_t_dev / 3.0), 0.0, 1.0))
+    temp_spike_spat = float(np.clip(min(1.0, spat_t_dev / 2.8), 0.0, 1.0))
     temp_spike_xgb = float(xgb_probs.get('temperature_spike', 0.0))
 
     fused_temp_spike = (
@@ -160,8 +170,10 @@ def evaluate_class_evidence(
         w_phys * temp_spike_phys +
         w_nov * iforest_novelty
     )
-    if temp_spike_temp >= 0.85 and temp_spike_xgb >= 0.35:
-        fused_temp_spike = max(fused_temp_spike, 0.90)
+    if is_raw_temp_spike or is_sustained_spike:
+        fused_temp_spike = max(fused_temp_spike, 0.92)
+    elif temp_spike_temp >= 0.70:
+        fused_temp_spike = max(fused_temp_spike, 0.82)
 
     class_evidence['temperature_spike'] = {
         'temporal': round(temp_spike_temp, 4),
@@ -173,21 +185,29 @@ def evaluate_class_evidence(
     class_fused_scores['temperature_spike'] = round(float(fused_temp_spike), 4)
 
     # 2. HUMIDITY SPIKE
+    # Sudden RH surge towards saturation (>= 96.0%) or large ΔRH step
+    h_diff_mag = abs(h_diff1)
+    is_raw_hum_spike = (h_val >= 96.0) or (h_diff_mag >= 20.0) or (h_rate >= 20.0)
+    is_sustained_hum_spike = (h_val >= 96.0) or (h_val >= 93.0 and h_diff24 >= 15.0 and spat_h_dev >= 2.0)
+
     hum_spike_temp = float(np.clip(
-        0.50 * min(1.0, max(0.0, (h_diff1 - 10.0) / 25.0)) +
-        0.30 * min(1.0, max(0.0, h_rate / 20.0)) +
-        0.20 * min(1.0, max(0.0, (h_val - 90.0) / 10.0)),
+        0.45 * min(1.0, max(0.0, (h_diff_mag - 8.0) / 20.0)) +
+        0.30 * min(1.0, max(0.0, h_rate / 18.0)) +
+        0.25 * min(1.0, max(0.0, (h_val - 88.0) / 10.0)),
         0.0, 1.0
     ))
-    if h_val >= 98.5 or h_diff1 >= 30.0:
-        hum_spike_temp = max(hum_spike_temp, 0.94)
+    if is_raw_hum_spike or is_sustained_hum_spike:
+        hum_spike_temp = max(hum_spike_temp, 0.95)
 
     hum_spike_phys = float(np.clip(
-        0.50 * (1.0 if h_val >= 98.0 else 0.0) +
-        0.30 * min(1.0, max(0.0, h_rate / 25.0)) +
+        0.50 * (1.0 if h_val >= 96.0 else min(1.0, max(0.0, (h_val - 85.0) / 10.0))) +
+        0.30 * min(1.0, max(0.0, h_rate / 20.0)) +
         0.20 * min(1.0, max(0.0, (2.0 - dew_dep) / 3.0)),
         0.0, 1.0
     ))
+    if h_val >= 96.0:
+        hum_spike_phys = max(hum_spike_phys, 0.94)
+
     hum_spike_spat = float(np.clip(min(1.0, spat_h_dev / 2.5), 0.0, 1.0))
     hum_spike_xgb = float(xgb_probs.get('humidity_spike', 0.0))
 
@@ -198,8 +218,10 @@ def evaluate_class_evidence(
         w_phys * hum_spike_phys +
         w_nov * iforest_novelty
     )
-    if hum_spike_temp >= 0.85 and (hum_spike_xgb >= 0.30 or h_val >= 98.0):
-        fused_hum_spike = max(fused_hum_spike, 0.92)
+    if is_raw_hum_spike or is_sustained_hum_spike:
+        fused_hum_spike = max(fused_hum_spike, 0.93)
+    elif hum_spike_temp >= 0.70:
+        fused_hum_spike = max(fused_hum_spike, 0.82)
 
     class_evidence['humidity_spike'] = {
         'temporal': round(hum_spike_temp, 4),
@@ -211,19 +233,29 @@ def evaluate_class_evidence(
     class_fused_scores['humidity_spike'] = round(float(fused_hum_spike), 4)
 
     # 3. PRESSURE JUMP
+    # Sudden abnormal pressure shift (-14 to -28 hPa or +12 to +25 hPa) or values < 980 hPa / > 1045 hPa
+    p_diff_mag = abs(p_diff1)
+    c_press_mean = float(feat_dict.get('cluster_press_mean', neighbor_p_med))
+    is_raw_press_jump = (p_diff_mag >= 5.0) or (p_rate >= 3.0) or (p_val < 975.0) or (p_val > 1045.0)
+    is_sustained_press_jump = (abs(p_val - c_press_mean) >= 12.0 and spat_p_dev >= 2.0) or (p_diff24 >= 10.0 and spat_p_dev >= 2.0) or (p_val < 980.0) or (p_val > 1040.0)
+
     press_jump_temp = float(np.clip(
-        0.60 * min(1.0, max(0.0, (p_rate - 1.5) / 4.0)) +
-        0.40 * min(1.0, max(0.0, p_z24 / 3.0)),
+        0.55 * min(1.0, max(0.0, (p_diff_mag - 1.5) / 4.0)) +
+        0.25 * min(1.0, max(0.0, (p_rate - 1.0) / 3.0)) +
+        0.20 * min(1.0, max(0.0, p_z24 / 2.5)),
         0.0, 1.0
     ))
-    if p_rate >= 3.5 or p_val < 970.0 or p_val > 1050.0:
-        press_jump_temp = max(press_jump_temp, 0.93)
+    if is_raw_press_jump or is_sustained_press_jump:
+        press_jump_temp = max(press_jump_temp, 0.94)
 
     press_jump_phys = float(np.clip(
-        0.60 * (1.0 if (p_val < 960.0 or p_val > 1050.0) else min(1.0, max(0.0, (980.0 - p_val) / 20.0))) +
-        0.40 * min(1.0, max(0.0, p_rate / 4.0)),
+        0.60 * (1.0 if (p_val < 975.0 or p_val > 1045.0) else min(1.0, max(0.0, abs(p_val - 1013.25) / 25.0))) +
+        0.40 * min(1.0, max(0.0, p_rate / 3.5)),
         0.0, 1.0
     ))
+    if p_val < 980.0 or p_val > 1045.0 or p_rate >= 3.0:
+        press_jump_phys = max(press_jump_phys, 0.94)
+
     press_jump_spat = float(np.clip(min(1.0, spat_p_dev / 2.5), 0.0, 1.0))
     press_jump_xgb = float(xgb_probs.get('pressure_jump', 0.0))
 
@@ -234,8 +266,10 @@ def evaluate_class_evidence(
         w_phys * press_jump_phys +
         w_nov * iforest_novelty
     )
-    if press_jump_temp >= 0.85 and (press_jump_xgb >= 0.30 or p_val < 970.0):
-        fused_press_jump = max(fused_press_jump, 0.92)
+    if is_raw_press_jump or is_sustained_press_jump:
+        fused_press_jump = max(fused_press_jump, 0.93)
+    elif press_jump_temp >= 0.70:
+        fused_press_jump = max(fused_press_jump, 0.82)
 
     class_evidence['pressure_jump'] = {
         'temporal': round(press_jump_temp, 4),
@@ -247,21 +281,29 @@ def evaluate_class_evidence(
     class_fused_scores['pressure_jump'] = round(float(fused_press_jump), 4)
 
     # 4. FREEZE
+    # Sensor locked at constant value across consecutive readings with zero variance.
+    # Exclude extreme anomalies (temp spike > 45, hum spike >= 96, multivariate conflicts, or offsets)
+    is_not_spike_or_conflict = (t_val < 45.0) and (t_val > -5.0) and (h_val < 96.0) and not (t_val >= 42.0 and h_val >= 85.0)
+
+    # Real freeze requires at least 5 consecutive identical readings on temperature or humidity, or 10 on pressure
+    # along with strictly near-zero variance
+    is_genuinely_frozen = (
+        (t_fcount >= 5 and t_var6 < 1e-4) or
+        (h_fcount >= 5 and h_var6 < 1e-4) or
+        (p_fcount >= 10 and p_var6 < 1e-4 and (t_fcount >= 4 or h_fcount >= 4)) or
+        (max(t_fcount, h_fcount) >= 6)
+    ) and is_not_spike_or_conflict
+
     freeze_temp = 0.0
-    if max_frozen >= 5:
+    if is_genuinely_frozen:
         freeze_temp = 0.98
-    elif max_frozen == 4:
-        freeze_temp = 0.90
-    elif max_frozen == 3:
-        freeze_temp = 0.50
-    elif max_frozen == 2:
-        freeze_temp = 0.20
+    elif (t_fcount == 4 or h_fcount == 4) and min(t_var6, h_var6) < 1e-4 and is_not_spike_or_conflict:
+        freeze_temp = 0.75
+    elif max_frozen == 3 and is_not_spike_or_conflict:
+        freeze_temp = 0.25
 
-    if t_var6 < 1e-4 and max_frozen >= 3:
-        freeze_temp = max(freeze_temp, 0.92)
-
-    freeze_phys = 0.85 if max_frozen >= 4 else (0.40 if max_frozen >= 3 else 0.0)
-    freeze_spat = 0.80 if max_frozen >= 4 else 0.05
+    freeze_phys = 0.90 if is_genuinely_frozen else 0.0
+    freeze_spat = 0.85 if is_genuinely_frozen else 0.05
     freeze_xgb = float(xgb_probs.get('freeze', 0.0))
 
     fused_freeze = (
@@ -271,8 +313,8 @@ def evaluate_class_evidence(
         w_phys * freeze_phys +
         w_nov * iforest_novelty
     )
-    if max_frozen >= 4:
-        fused_freeze = max(fused_freeze, 0.95)
+    if is_genuinely_frozen:
+        fused_freeze = max(fused_freeze, 0.94)
 
     class_evidence['freeze'] = {
         'temporal': round(freeze_temp, 4),
@@ -317,19 +359,28 @@ def evaluate_class_evidence(
     }
     class_fused_scores['drift'] = round(float(fused_drift), 4)
 
-    # 6. OFFSET
-    is_step_shift = abs(t_diff1) >= 3.5 or abs(t_diff24) >= 5.0
+    # 6. OFFSET (Calibration Step Bias across Temperature, Humidity, or Pressure)
+    # Step change that persists, without the extreme magnitude of a spike or gradual slope of a drift
+    t_offset_step = (3.5 <= abs(t_diff1) <= 12.0 or 4.0 <= abs(t_diff24) <= 12.0) and (t_val < 45.0) and abs(t_slope) < 0.25
+    h_offset_step = (12.0 <= abs(h_diff1) <= 30.0 or 14.0 <= abs(h_diff24) <= 30.0) and (h_val < 96.0)
+    p_offset_step = (6.0 <= abs(p_diff1) <= 20.0 or 7.0 <= abs(p_diff24) <= 20.0) and (p_val >= 975.0 and p_val <= 1045.0)
+
+    is_offset_active = (t_offset_step or h_offset_step or p_offset_step) and not (t_val >= 46.0 or h_val >= 97.0 or p_val < 970.0)
+
     offset_temp = float(np.clip(
-        0.55 * min(1.0, max(0.0, (abs(t_diff24) - 3.0) / 6.0)) +
-        0.30 * min(1.0, max(0.0, abs(t_diff1) / 6.0)) +
-        0.15 * min(1.0, max(0.0, t_z24 / 2.5)),
+        0.40 * min(1.0, max(0.0, (abs(t_diff24) - 2.5) / 6.0)) +
+        0.30 * min(1.0, max(0.0, (abs(h_diff24) - 10.0) / 15.0)) +
+        0.30 * min(1.0, max(0.0, (abs(p_diff24) - 5.0) / 10.0)),
         0.0, 1.0
     ))
-    if is_step_shift:
-        offset_temp = max(offset_temp, 0.88)
+    if is_offset_active:
+        offset_temp = max(offset_temp, 0.92)
 
-    offset_phys = float(np.clip(min(1.0, abs(t_diff24) / 7.0), 0.0, 1.0))
-    offset_spat = float(np.clip(min(1.0, spat_t_dev / 2.5), 0.0, 1.0))
+    offset_phys = float(np.clip(max(abs(t_diff24) / 8.0, abs(h_diff24) / 25.0, abs(p_diff24) / 15.0), 0.0, 1.0))
+    if is_offset_active:
+        offset_phys = max(offset_phys, 0.85)
+
+    offset_spat = float(np.clip(max(spat_t_dev, spat_h_dev, spat_p_dev) / 2.5, 0.0, 1.0))
     offset_xgb = float(xgb_probs.get('offset', 0.0))
 
     fused_offset = (
@@ -339,8 +390,10 @@ def evaluate_class_evidence(
         w_phys * offset_phys +
         w_nov * iforest_novelty
     )
-    if offset_temp >= 0.80 and (offset_xgb >= 0.25 or is_step_shift):
-        fused_offset = max(fused_offset, 0.88)
+    if is_offset_active:
+        fused_offset = max(fused_offset, 0.90)
+    elif offset_temp >= 0.70:
+        fused_offset = max(fused_offset, 0.80)
 
     class_evidence['offset'] = {
         'temporal': round(offset_temp, 4),
@@ -375,6 +428,7 @@ def evaluate_class_evidence(
         'fused': round(float(fused_missing), 4)
     }
     class_fused_scores['missing_data'] = round(float(fused_missing), 4)
+
 
     # 8. MULTIVARIATE INCONSISTENCY
     multi_conflict_active = (t_val >= 42.0 and h_val >= 85.0) or (dew_dep < -0.2) or (t_val >= 40.0 and h_val >= 90.0)

@@ -122,49 +122,27 @@ def run_pipeline(records: Union[List[Dict[str, Any]], Dict[str, Any]], iso_model
         top_fused_score = class_fused_scores[top_anom_class]
         top_xgb_conf = class_probs.get(top_anom_class, 0.0)
 
-        # Triage between normal, known anomaly, and novel anomaly
-        anom_threshold = float(decision_cfg.get('anomaly_threshold', 0.40))
-        known_threshold = float(decision_cfg.get('known_class_threshold', 0.35))
-        novelty_threshold = float(decision_cfg.get('novelty_threshold', 0.65))
+        # Call robust decision engine
+        decision = make_decision(
+            fused=max(fused_score, top_fused_score),
+            probs=prob_row,
+            classes=classes,
+            config=decision_cfg,
+            iforest=iso_val,
+            context={
+                **feat_dict,
+                'is_missing_data': is_missing,
+                'top_anom_class': top_anom_class,
+                'top_fused_score': top_fused_score
+            }
+        )
 
-        if is_missing:
-            decision = {
-                'decision': 'known_anomaly',
-                'root_cause': 'missing_data',
-                'confidence': 0.98
-            }
-        elif top_fused_score >= anom_threshold or (1.0 - class_probs.get('normal', 0.5)) >= 0.45:
-            # Anomaly is confirmed
-            if top_fused_score >= known_threshold and (top_xgb_conf >= 0.20 or class_evidence[top_anom_class]['temporal'] >= 0.70 or class_evidence[top_anom_class]['physics'] >= 0.70 or class_evidence[top_anom_class]['spatial'] >= 0.70):
-                decision = {
-                    'decision': 'known_anomaly',
-                    'root_cause': top_anom_class,
-                    'confidence': round(float(max(top_xgb_conf, top_fused_score)), 4)
-                }
-            elif iso_val >= novelty_threshold or top_xgb_conf < 0.15:
-                decision = {
-                    'decision': 'novel_anomaly',
-                    'root_cause': 'novel_anomaly',
-                    'confidence': round(float(max(iso_val, top_fused_score)), 4)
-                }
-            else:
-                decision = {
-                    'decision': 'known_anomaly',
-                    'root_cause': top_anom_class,
-                    'confidence': round(float(top_fused_score), 4)
-                }
-        elif iso_val >= novelty_threshold:
-            decision = {
-                'decision': 'novel_anomaly',
-                'root_cause': 'novel_anomaly',
-                'confidence': round(float(iso_val), 4)
-            }
-        else:
-            decision = {
-                'decision': 'normal',
-                'root_cause': 'normal',
-                'confidence': round(float(max(class_probs.get('normal', 0.95), 1.0 - top_fused_score)), 4)
-            }
+        # If decision engine diagnosed a generic known anomaly or top fused score is strong, assign top_anom_class
+        if decision['decision'] == 'known_anomaly' and top_fused_score >= 0.40 and top_anom_class not in ['normal', 'known_anomaly']:
+            if decision['root_cause'] in ['normal', 'novel_anomaly', 'known_anomaly']:
+                decision['root_cause'] = top_anom_class
+                decision['confidence'] = round(float(max(decision['confidence'], top_fused_score)), 4)
+
 
         # 8. Operational Severity Scorer
         f_count = max(

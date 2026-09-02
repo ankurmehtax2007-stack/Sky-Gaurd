@@ -2,16 +2,15 @@
 /*
  * SkyGuard AI - Manual Anomaly Injection Engine
  *
- * Supported 9 Anomaly Types:
+ * Supported 8 Live Anomaly Types:
  * 1. temperature_spike           -> Sudden abnormal temperature shift
  * 2. humidity_spike              -> Sudden abnormal RH saturation jump
  * 3. pressure_jump               -> Sudden abnormal barometric pressure change
  * 4. freeze                      -> Sensor value locked unchanged across consecutive readings
- * 5. drift                       -> Monotonic gradual calibration drift away from baseline
- * 6. offset                      -> Sudden persistent calibration step bias
- * 7. missing_data                -> Null/missing sensor values with preserved timestamp
- * 8. multivariate_inconsistency  -> Psychrometric / thermodynamic cross-sensor conflict
- * 9. spatial_inconsistency       -> Station deviates sharply from companion station in same city
+ * 5. offset                      -> Sudden persistent calibration step bias
+ * 6. missing_data                -> Null/missing sensor values with preserved timestamp
+ * 7. multivariate_inconsistency  -> Psychrometric / thermodynamic cross-sensor conflict
+ * 8. spatial_inconsistency       -> Station deviates sharply from companion station in same city
  *
  * IMPORTANT:
  * Normal telemetry is sent by default. Manual injection affects a 6-record window (60s),

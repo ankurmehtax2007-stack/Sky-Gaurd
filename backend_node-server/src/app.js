@@ -15,6 +15,7 @@ import { processReading } from "./modules/readings/reading.service.js";
 import { createFeedback, getFeedbacks } from "./modules/feedback/feedback.service.js";
 import { getReportById } from "./modules/anomalies/anomaly.controller.js";
 import { findAnalyses } from "./modules/analyses/analysis.repository.js";
+import { broadcast } from "./websocket/websocket.manager.js";
 
 const app = express();
 
@@ -232,15 +233,61 @@ app.post("/api/reset-state", async (req, res, next) => {
     }
 });
 
+// Unified Records & Buffers Clear Endpoint
+app.post(["/api/records/clear", "/api/clear-all"], async (req, res, next) => {
+    try {
+        const Analysis = mongoose.model("Analysis");
+        const Anomaly = mongoose.model("Anomaly");
+        const SensorReading = mongoose.model("SensorReading");
+
+        await Promise.all([
+            Analysis.deleteMany({}),
+            Anomaly.deleteMany({}),
+            SensorReading.deleteMany({})
+        ]);
+
+        // Reset FastAPI ML streaming state
+        const mlUrl = process.env.ML_SERVICE_URL || "http://localhost:8000";
+        try {
+            await fetch(`${mlUrl}/api/reset-state`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: AbortSignal.timeout(2000)
+            });
+        } catch (mlErr) {
+            logger.warn({ err: mlErr.message }, "ML reset-state proxy warning during clear");
+        }
+
+        // Broadcast to all connected WebSocket clients so UI updates immediately
+        try {
+            broadcast({
+                type: "RECORDS_CLEARED",
+                message: "All database records and in-memory anomaly alerts cleared.",
+                timestamp: new Date().toISOString()
+            });
+        } catch (wsErr) {
+            logger.warn({ err: wsErr.message }, "WebSocket broadcast error during clear");
+        }
+
+        return res.status(200).json({
+            status: "success",
+            message: "All database records, anomalies, and ML streaming buffers cleared successfully."
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
 // 8. Simulator Control Endpoints
-const SIMULATOR_URL = process.env.SIMULATOR_URL || "http://localhost:3001";
+const SIMULATOR_URL = process.env.SIMULATOR_URL || "http://127.0.0.1:3001";
 let localSimRunning = true;
 
 app.get("/api/simulator/status", async (req, res) => {
     try {
-        const response = await fetch(`${SIMULATOR_URL}/status`, { timeout: 1500 });
+        const response = await fetch(`${SIMULATOR_URL}/status`, { signal: AbortSignal.timeout(2000) });
         if (response.ok) {
             const data = await response.json();
+            localSimRunning = data.isRunning !== undefined ? data.isRunning : localSimRunning;
             return res.status(200).json(data);
         }
     } catch { }
@@ -256,7 +303,7 @@ app.get("/api/simulator/status", async (req, res) => {
 
 app.get("/api/simulator/injection-status", async (req, res) => {
     try {
-        const response = await fetch(`${SIMULATOR_URL}/injection-status`, { timeout: 1500 });
+        const response = await fetch(`${SIMULATOR_URL}/injection-status`, { signal: AbortSignal.timeout(2000) });
         if (response.ok) {
             const data = await response.json();
             return res.status(200).json(data);
@@ -277,7 +324,7 @@ app.all(["/api/simulator/start", "/api/simulator/stop", "/api/simulator/toggle",
             method: req.method,
             headers: { "Content-Type": "application/json" },
             body: req.method === "POST" ? JSON.stringify(req.body) : undefined,
-            timeout: 2000
+            signal: AbortSignal.timeout(2500)
         });
         if (response.ok) {
             const data = await response.json();

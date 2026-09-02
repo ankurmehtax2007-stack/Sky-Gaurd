@@ -42,7 +42,7 @@ DEFAULT_METADATA = {
         "w_xgboost": 0.45, "w_physics": 0.25, "w_iforest": 0.15, "w_temporal": 0.075, "w_spatial": 0.075
     },
     "decision_config": {
-        "anomaly_threshold": 0.40, "known_class_threshold": 0.40, "novelty_threshold": 0.65
+        "anomaly_threshold": 0.40, "known_class_threshold": 0.35, "novelty_threshold": 0.85
     },
     "physics_config": {
         "temp_min_c": -15.0, "temp_max_c": 48.0, "humidity_min_pct": 5.0, "humidity_max_pct": 98.0,
@@ -87,22 +87,27 @@ def heuristic_xgb_predict(X, num_classes=10):
         rh = arr[i, 3] if arr.shape[1] > 3 else 50.0
         p = arr[i, 4] if arr.shape[1] > 4 else 1013.25
         t_z = arr[i, 18] if arr.shape[1] > 18 else (t - 28.5) / 5.5
+        t_diff1 = arr[i, 34] if arr.shape[1] > 34 else 0.0
+        h_diff1 = arr[i, 47] if arr.shape[1] > 47 else 0.0
+        p_diff1 = arr[i, 60] if arr.shape[1] > 60 else 0.0
         frozen_count = arr[i, 40] if arr.shape[1] > 40 else 1.0
 
-        if t >= 48.0 or t <= -12.0:
-            conf = min(0.96, 0.75 + min(0.20, (max(t - 48.0, -12.0 - t) / 10.0) * 0.15))
-            probs[i, 1] = conf
-            probs[i, 0] = 1.0 - conf
-        elif rh >= 98.0 or rh <= 5.0:
+        if t >= 45.0 or t <= -8.0 or abs(t_diff1) >= 6.0:
+            probs[i, 1] = 0.92
+            probs[i, 0] = 0.08
+        elif rh >= 96.0 or abs(h_diff1) >= 20.0:
             probs[i, 2] = 0.92
             probs[i, 0] = 0.08
-        elif p <= 930.0 or p >= 1060.0:
+        elif p <= 975.0 or p >= 1045.0 or abs(p_diff1) >= 5.0:
             probs[i, 3] = 0.92
             probs[i, 0] = 0.08
-        elif frozen_count >= 5.0:
+        elif frozen_count >= 5.0 and t < 45.0 and rh < 96.0:
             probs[i, 4] = 0.90
             probs[i, 0] = 0.10
-        elif t >= 42.0 and rh >= 88.0:
+        elif (3.5 <= abs(t_diff1) <= 12.0 or 12.0 <= abs(h_diff1) <= 30.0 or 6.0 <= abs(p_diff1) <= 20.0):
+            probs[i, 6] = 0.88
+            probs[i, 0] = 0.12
+        elif t >= 42.0 and rh >= 85.0:
             probs[i, 8] = 0.88
             probs[i, 0] = 0.12
         elif abs(t_z) >= 3.5:
@@ -216,5 +221,16 @@ def load_artifacts():
         fresh_iso, fresh_xgb = _build_fresh_models(features, num_classes)
         if iso is None: iso = fresh_iso
         if xgb is None: xgb = fresh_xgb
+
+    if xgb is not None:
+        if hasattr(xgb, 'feature_names_in_') and xgb.feature_names_in_ is not None:
+            metadata['feature_cols'] = list(xgb.feature_names_in_)
+        elif hasattr(xgb, 'get_booster'):
+            try:
+                booster_fn = xgb.get_booster().feature_names
+                if booster_fn:
+                    metadata['feature_cols'] = list(booster_fn)
+            except Exception:
+                pass
 
     return iso, xgb, metadata

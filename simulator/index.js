@@ -51,8 +51,8 @@ export const publishReading = (station, injectionConfig = null, simulatedDate = 
 
 export const triggerCycle = () => {
     lastCycleTime = new Date().toISOString();
-    // Advance simulated timestamp by exactly 10 seconds per cycle
-    currentSimulatedTime = new Date(currentSimulatedTime.getTime() + intervalMs);
+    // Advance simulated timestamp using current wall clock date
+    currentSimulatedTime = new Date();
     totalCycles++;
 
     const results = [];
@@ -191,7 +191,10 @@ export const registerManualInjection = ({
 };
 
 export const startSimulation = () => {
-    if (intervalTimer) return false;
+    if (intervalTimer) {
+        clearInterval(intervalTimer);
+        intervalTimer = null;
+    }
     isRunning = true;
     intervalTimer = setInterval(() => {
         triggerCycle();
@@ -327,7 +330,7 @@ const server = http.createServer((req, res) => {
                 const city = parsed.city || null;
                 const sensor = parsed.sensor || "temperature";
                 const intensity = parsed.intensity || "high";
-                const duration = parsed.duration_records || parsed.duration || 6;
+                const duration = parsed.duration_points || parsed.duration_records || parsed.duration || 6;
 
                 const injection = registerManualInjection({
                     city,
@@ -338,9 +341,16 @@ const server = http.createServer((req, res) => {
                     duration_records: duration
                 });
 
+                // Immediately emit the abnormal reading so the UI updates instantly!
+                try {
+                    triggerCycle();
+                } catch (e) {
+                    console.error("[Simulator] Error during immediate cycle trigger:", e.message);
+                }
+
                 return sendJson(200, {
                     status: "success",
-                    message: `Scheduled 6-record ${anom} injection on ${injection.station_id}`,
+                    message: `Scheduled ${duration}-record ${anom} injection on ${injection.station_id}`,
                     injection
                 });
             } catch (err) {
@@ -353,7 +363,7 @@ const server = http.createServer((req, res) => {
     sendJson(404, { status: "error", message: "Not found" });
 });
 
-server.listen(port, () => {
+server.listen(port, "0.0.0.0", () => {
     console.log(`[Simulator] HTTP Control Server running on port ${port}`);
 });
 
